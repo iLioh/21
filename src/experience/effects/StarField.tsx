@@ -3,6 +3,7 @@ import { useMemo, useRef } from 'react'
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Points, PointsMaterial } from 'three'
 import type { TimelineState } from '../../hooks/useExperienceTimeline'
 import { seededRandom, smoothstep } from '../../utils/math'
+import { NORMALIZED_MILESTONES } from '../../config/experience'
 
 export function StarField({ timeline, count }: { timeline: React.RefObject<TimelineState>; count: number }) {
   const points = useRef<Points<BufferGeometry, PointsMaterial>>(null)
@@ -25,7 +26,7 @@ export function StarField({ timeline, count }: { timeline: React.RefObject<Timel
   useFrame(({ clock }) => {
     if (!points.current) return
     const p = timeline.current?.progress ?? 0
-    points.current.material.opacity = smoothstep(0.1, 0.3, p) * 0.75
+    points.current.material.opacity = smoothstep(NORMALIZED_MILESTONES.impulse1End, NORMALIZED_MILESTONES.earthDepartureEnd, p) * 0.75
     points.current.material.size = 0.045 + Math.sin(clock.elapsedTime * 0.45) * 0.005
     points.current.rotation.z = clock.elapsedTime * 0.003
   })

@@ -3,6 +3,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import { Color, Group, InstancedMesh, MathUtils, Mesh, Object3D } from 'three'
 import type { TimelineState } from '../../hooks/useExperienceTimeline'
 import { seededRandom, smoothstep } from '../../utils/math'
+import { NORMALIZED_MILESTONES } from '../../config/experience'
 
 interface FlowerFieldProps {
   timeline: React.RefObject<TimelineState>
@@ -88,7 +89,7 @@ export function FlowerField({ timeline, count }: FlowerFieldProps) {
   useFrame(({ clock }) => {
     if (!group.current) return
     const p = timeline.current?.progress ?? 0
-    const fade = 1 - smoothstep(0.11, 0.26, p)
+    const fade = 1 - smoothstep(NORMALIZED_MILESTONES.impulse1Start, NORMALIZED_MILESTONES.impulse1End + 0.03, p)
     group.current.visible = fade > 0.01
     group.current.rotation.z = Math.sin(clock.elapsedTime * 0.55) * 0.005
     group.current.position.x = Math.sin(clock.elapsedTime * 0.35) * 0.03

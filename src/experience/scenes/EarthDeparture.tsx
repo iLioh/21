@@ -3,6 +3,7 @@ import { useMemo, useRef } from 'react'
 import { AdditiveBlending, BackSide, Group, ShaderMaterial } from 'three'
 import type { TimelineState } from '../../hooks/useExperienceTimeline'
 import { smoothstep } from '../../utils/math'
+import { NORMALIZED_MILESTONES } from '../../config/experience'
 
 const earthVertex = `
   varying vec3 vNormal;
@@ -63,8 +64,8 @@ export function EarthDeparture({ timeline }: { timeline: React.RefObject<Timelin
 
   useFrame(({ clock }) => {
     const p = timeline.current?.progress ?? 0
-    const emerge = smoothstep(0.055, 0.12, p)
-    const fade = emerge * (1 - smoothstep(0.3, 0.42, p))
+    const emerge = smoothstep(NORMALIZED_MILESTONES.impulse1Start + 0.01, NORMALIZED_MILESTONES.impulse1End, p)
+    const fade = emerge * (1 - smoothstep(NORMALIZED_MILESTONES.earthDepartureEnd - 0.04, NORMALIZED_MILESTONES.earthDepartureEnd + 0.05, p))
     if (group.current) {
       group.current.visible = fade > 0.002
       group.current.rotation.y = clock.elapsedTime * 0.018

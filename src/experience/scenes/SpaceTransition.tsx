@@ -3,6 +3,7 @@ import { useMemo, useRef } from 'react'
 import { BackSide, ShaderMaterial } from 'three'
 import type { TimelineState } from '../../hooks/useExperienceTimeline'
 import { smoothstep } from '../../utils/math'
+import { NORMALIZED_MILESTONES } from '../../config/experience'
 
 const vertexShader = `
   varying vec3 vPos;
@@ -40,7 +41,7 @@ export function SpaceTransition({ timeline }: { timeline: React.RefObject<Timeli
   useFrame(({ clock }) => {
     if (!material.current) return
     material.current.uniforms.uTime.value = clock.elapsedTime
-    material.current.uniforms.uSpace.value = smoothstep(0.12, 0.36, timeline.current?.progress ?? 0)
+    material.current.uniforms.uSpace.value = smoothstep(NORMALIZED_MILESTONES.impulse1End, NORMALIZED_MILESTONES.earthDepartureEnd + 0.04, timeline.current?.progress ?? 0)
   })
 
   return (

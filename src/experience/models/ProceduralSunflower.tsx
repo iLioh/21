@@ -4,6 +4,7 @@ import { Color, InstancedMesh, MathUtils, Object3D } from 'three'
 import type { Group } from 'three'
 import type { TimelineState } from '../../hooks/useExperienceTimeline'
 import { seededRandom, smoothstep } from '../../utils/math'
+import { NORMALIZED_MILESTONES } from '../../config/experience'
 
 interface ProceduralSunflowerProps {
   timeline: React.RefObject<TimelineState>
@@ -57,7 +58,7 @@ export function ProceduralSunflower({ timeline }: ProceduralSunflowerProps) {
 
   useFrame(({ clock }, delta) => {
     if (!group.current) return
-    const reveal = smoothstep(0.75, 0.88, timeline.current?.progress ?? 0)
+    const reveal = smoothstep(NORMALIZED_MILESTONES.sunflowerRevealStart, NORMALIZED_MILESTONES.sunflowerRevealEnd, timeline.current?.progress ?? 0)
     const targetScale = MathUtils.lerp(0.7, 1, reveal)
     group.current.scale.setScalar(MathUtils.lerp(group.current.scale.x, targetScale, 1 - Math.exp(-delta * 2.5)))
     group.current.rotation.z = Math.sin(clock.elapsedTime * 0.18) * 0.018

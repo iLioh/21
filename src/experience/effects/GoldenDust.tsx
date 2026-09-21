@@ -3,6 +3,7 @@ import { useMemo, useRef } from 'react'
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Points, PointsMaterial } from 'three'
 import type { TimelineState } from '../../hooks/useExperienceTimeline'
 import { seededRandom, smoothstep } from '../../utils/math'
+import { NORMALIZED_MILESTONES } from '../../config/experience'
 
 export function GoldenDust({ timeline, count }: { timeline: React.RefObject<TimelineState>; count: number }) {
   const ref = useRef<Points<BufferGeometry, PointsMaterial>>(null)
@@ -22,7 +23,8 @@ export function GoldenDust({ timeline, count }: { timeline: React.RefObject<Time
   useFrame(({ clock }) => {
     if (!ref.current) return
     const p = timeline.current?.progress ?? 0
-    ref.current.material.opacity = 0.08 + smoothstep(0.03, 0.18, p) * 0.5
+    ref.current.material.opacity = (0.08 + smoothstep(NORMALIZED_MILESTONES.impulse1Start, NORMALIZED_MILESTONES.impulse1End, p) * 0.5) *
+      (1 - smoothstep(NORMALIZED_MILESTONES.impulse2End, NORMALIZED_MILESTONES.approachEnd, p))
     ref.current.rotation.y = Math.sin(clock.elapsedTime * 0.05) * 0.025
     ref.current.position.y = Math.sin(clock.elapsedTime * 0.18) * 0.12
   })

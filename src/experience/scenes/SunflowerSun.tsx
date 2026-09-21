@@ -3,6 +3,7 @@ import { useMemo, useRef } from 'react'
 import { AdditiveBlending, BufferAttribute, BufferGeometry, CanvasTexture, Color, Group, Points, PointsMaterial, Sprite, SpriteMaterial } from 'three'
 import type { TimelineState } from '../../hooks/useExperienceTimeline'
 import { seededRandom, smoothstep } from '../../utils/math'
+import { NORMALIZED_MILESTONES } from '../../config/experience'
 import { ProceduralSunflower } from '../models/ProceduralSunflower'
 
 function glowTexture() {
@@ -49,8 +50,8 @@ export function SunflowerSun({ timeline, particleCount }: { timeline: React.RefO
 
   useFrame(({ clock }) => {
     const p = timeline.current?.progress ?? 0
-    const appear = smoothstep(0.63, 0.74, p)
-    const reveal = smoothstep(0.75, 0.88, p)
+    const appear = smoothstep(NORMALIZED_MILESTONES.sunAppearStart, NORMALIZED_MILESTONES.sunAppearEnd, p)
+    const reveal = smoothstep(NORMALIZED_MILESTONES.sunflowerRevealStart, NORMALIZED_MILESTONES.sunflowerRevealEnd, p)
     if (group.current) {
       group.current.visible = appear > 0.002
       group.current.position.y = 16 + Math.sin(clock.elapsedTime * 0.28) * 0.08

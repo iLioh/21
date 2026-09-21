@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import type { PointLight } from 'three'
 import type { TimelineState } from '../hooks/useExperienceTimeline'
 import { smoothstep } from '../utils/math'
+import { NORMALIZED_MILESTONES } from '../config/experience'
 
 export function Lighting({ timeline }: { timeline: React.RefObject<TimelineState> }) {
   const warm = useRef<PointLight>(null)
@@ -10,7 +11,7 @@ export function Lighting({ timeline }: { timeline: React.RefObject<TimelineState
   useFrame(() => {
     if (!warm.current) return
     const p = timeline.current?.progress ?? 0
-    warm.current.intensity = 3 + smoothstep(0.5, 0.82, p) * 18
+    warm.current.intensity = 3 + smoothstep(NORMALIZED_MILESTONES.sunAppearStart, NORMALIZED_MILESTONES.approachEnd, p) * 18
   })
 
   return (
