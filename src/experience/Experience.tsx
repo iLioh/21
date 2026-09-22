@@ -1,10 +1,13 @@
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { AdaptiveDpr } from '@react-three/drei'
 import { Bloom, DepthOfField, EffectComposer, Vignette } from '@react-three/postprocessing'
-import { Suspense } from 'react'
+import { Suspense, useRef } from 'react'
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three'
 import type { DeviceProfile } from '../hooks/useDevicePerformance'
 import type { TimelineState } from '../hooks/useExperienceTimeline'
+import type { ExperiencePhase } from '../types/experience'
+import { timelineConfig } from '../config/experience'
+import { computeKinematicsFromProgress } from '../utils/kinematics'
 import { CameraRig } from './CameraRig'
 import { Lighting } from './Lighting'
 import { GoldenDust } from './effects/GoldenDust'
@@ -14,16 +17,80 @@ import { EarthDeparture } from './scenes/EarthDeparture'
 import { SpaceTransition } from './scenes/SpaceTransition'
 import { SunflowerSun } from './scenes/SunflowerSun'
 import { WarpTunnel } from './scenes/WarpTunnel'
+import { SpeedLines } from './effects/SpeedLines'
 
 interface ExperienceProps {
   timeline: React.RefObject<TimelineState>
+  activeRef: React.RefObject<boolean>
+  elapsedRef: React.RefObject<number>
+  onPhaseChange: (phase: ExperiencePhase) => void
   profile: DeviceProfile
   restartToken: number
 }
 
-function World({ timeline, profile, restartToken }: ExperienceProps) {
+function TimelineDriver({
+  timeline,
+  activeRef,
+  elapsedRef,
+  onPhaseChange,
+  reducedMotion,
+}: {
+  timeline: React.RefObject<TimelineState>
+  activeRef: React.RefObject<boolean>
+  elapsedRef: React.RefObject<number>
+  onPhaseChange: (phase: ExperiencePhase) => void
+  reducedMotion: boolean
+}) {
+  const currentPhaseRef = useRef<ExperiencePhase>('INTRO')
+
+  useFrame((_, delta) => {
+    if (!activeRef.current) {
+      currentPhaseRef.current = 'INTRO'
+      return
+    }
+    const pace = reducedMotion ? 1.3 : 1
+    const total = timelineConfig.finalEnd * pace
+    const dt = Math.min(delta, 0.05)
+    elapsedRef.current = (elapsedRef.current ?? 0) + dt
+    const p = Math.min(1, elapsedRef.current / total)
+    const state = computeKinematicsFromProgress(p, reducedMotion)
+    if (timeline.current) {
+      Object.assign(timeline.current, state)
+    }
+
+    const elapsed = elapsedRef.current
+    let nextPhase: ExperiencePhase = 'ASCENDING'
+    if (elapsed >= timelineConfig.revealEnd * pace) {
+      nextPhase = 'FINAL'
+    } else if (elapsed >= timelineConfig.approachEnd * pace) {
+      nextPhase = 'REVEAL'
+    } else if (elapsed >= timelineConfig.warpEnd * pace) {
+      nextPhase = 'APPROACH'
+    } else if (elapsed >= timelineConfig.spaceEnd * pace) {
+      nextPhase = 'WARP'
+    } else if (elapsed >= timelineConfig.ascendEnd * pace) {
+      nextPhase = 'SPACE'
+    }
+
+    if (nextPhase !== currentPhaseRef.current) {
+      currentPhaseRef.current = nextPhase
+      onPhaseChange(nextPhase)
+    }
+  }, -1)
+
+  return null
+}
+
+function World({ timeline, activeRef, elapsedRef, onPhaseChange, profile, restartToken }: ExperienceProps) {
   return (
     <>
+      <TimelineDriver
+        timeline={timeline}
+        activeRef={activeRef}
+        elapsedRef={elapsedRef}
+        onPhaseChange={onPhaseChange}
+        reducedMotion={profile.reducedMotion}
+      />
       <CameraRig timeline={timeline} profile={profile} restartToken={restartToken} />
       <SpaceTransition timeline={timeline} />
       <EarthDeparture timeline={timeline} />
@@ -32,6 +99,7 @@ function World({ timeline, profile, restartToken }: ExperienceProps) {
       <StarField timeline={timeline} count={profile.isLowPower ? 620 : 1100} />
       <GoldenDust timeline={timeline} count={profile.isLowPower ? 260 : 540} />
       <WarpTunnel timeline={timeline} count={profile.particleCount} />
+      <SpeedLines timeline={timeline} count={profile.isLowPower ? 180 : 360} />
       <SunflowerSun timeline={timeline} particleCount={profile.particleCount} />
       <AdaptiveDpr pixelated />
       {!profile.isLowPower && !profile.reducedMotion && (
@@ -63,7 +131,7 @@ export function Experience(props: ExperienceProps) {
           gl.toneMapping = ACESFilmicToneMapping
           gl.toneMappingExposure = 1.08
           gl.outputColorSpace = SRGBColorSpace
-          gl.setClearColor('#02040a')
+          gl.setClearColor('#42a1eb')
         }}
       >
         <Suspense fallback={null}>

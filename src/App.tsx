@@ -8,7 +8,7 @@ import { useExperienceTimeline } from './hooks/useExperienceTimeline'
 
 export default function App() {
   const profile = useDevicePerformance()
-  const { phase, timelineState, start, reset } = useExperienceTimeline(profile.reducedMotion)
+  const { phase, timelineState, activeRef, elapsedRef, setPhase, start, reset } = useExperienceTimeline(profile.reducedMotion)
   const [restartToken, setRestartToken] = useState(0)
   const started = phase !== 'INTRO'
 
@@ -19,7 +19,14 @@ export default function App() {
 
   return (
     <main className="experience-shell">
-      <Experience timeline={timelineState} profile={profile} restartToken={restartToken} />
+      <Experience
+        timeline={timelineState}
+        activeRef={activeRef}
+        elapsedRef={elapsedRef}
+        onPhaseChange={setPhase}
+        profile={profile}
+        restartToken={restartToken}
+      />
       <div className="film-grain" aria-hidden="true" />
       <div className="cinema-bars" aria-hidden="true" />
       <Intro visible={phase === 'INTRO'} isMobile={profile.isMobile} onStart={start} />

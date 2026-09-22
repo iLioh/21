@@ -3,7 +3,6 @@ import { useMemo, useRef } from 'react'
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Points, PointsMaterial } from 'three'
 import type { TimelineState } from '../../hooks/useExperienceTimeline'
 import { seededRandom, smoothstep } from '../../utils/math'
-import { NORMALIZED_MILESTONES } from '../../config/experience'
 
 export function GoldenDust({ timeline, count }: { timeline: React.RefObject<TimelineState>; count: number }) {
   const ref = useRef<Points<BufferGeometry, PointsMaterial>>(null)
@@ -23,15 +22,18 @@ export function GoldenDust({ timeline, count }: { timeline: React.RefObject<Time
   useFrame(({ clock }) => {
     if (!ref.current) return
     const p = timeline.current?.progress ?? 0
-    ref.current.material.opacity = (0.08 + smoothstep(NORMALIZED_MILESTONES.impulse1Start, NORMALIZED_MILESTONES.impulse1End, p) * 0.5) *
-      (1 - smoothstep(NORMALIZED_MILESTONES.impulse2End, NORMALIZED_MILESTONES.approachEnd, p))
+    // En el jardín de día (p < 0.11): polen dorado brillante flotando bajo el sol
+    // En el espacio: polvo estelar que acompaña el viaje
+    const gardenPollen = (0.50 - smoothstep(0.09, 0.22, p) * 0.25) * (1 - smoothstep(0.76, 0.88, p))
+    const spaceDust = smoothstep(0.12, 0.28, p) * 0.45 * (1 - smoothstep(0.76, 0.88, p))
+    ref.current.material.opacity = gardenPollen + spaceDust
     ref.current.rotation.y = Math.sin(clock.elapsedTime * 0.05) * 0.025
     ref.current.position.y = Math.sin(clock.elapsedTime * 0.18) * 0.12
   })
 
   return (
     <points ref={ref} geometry={geometry} frustumCulled={false}>
-      <pointsMaterial size={0.065} color="#ffca51" transparent opacity={0.12} depthWrite={false} blending={AdditiveBlending} sizeAttenuation />
+      <pointsMaterial size={0.075} color="#ffe475" transparent opacity={0.35} depthWrite={false} blending={AdditiveBlending} sizeAttenuation />
     </points>
   )
 }

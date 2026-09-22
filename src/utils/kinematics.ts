@@ -1,4 +1,3 @@
-import { TIMELINE_MILESTONES } from '../config/experience'
 import { clamp01 } from './math'
 
 export interface KinematicState {
@@ -8,96 +7,116 @@ export interface KinematicState {
   departureBoost: number
   finalBoost: number
   boostAmount: number
+  fovImpulse: number
+  visualWarp: number
   journeyProgress: number
   intensity: number
 }
 
-const T_FIELD = TIMELINE_MILESTONES.fieldEnd // 2.0
-const T_IMPULSE1 = TIMELINE_MILESTONES.impulse1End // 3.6
-const T_IMPULSE2_START = TIMELINE_MILESTONES.impulse2Start // 11.3
-const T_IMPULSE2_END = TIMELINE_MILESTONES.impulse2End // 12.6
-const T_DECEL_END = TIMELINE_MILESTONES.sunflowerRevealEnd // 16.5
-const T_TOTAL = TIMELINE_MILESTONES.totalDuration // 18.0
+// Hitos normalizados clave:
+// 0.00 - 0.11: Campo en reposo
+// 0.11 - 0.22: Impulso 1 (aceleración suave 0 -> 1.0)
+// 0.22 - 0.65: Crucero a velocidad constante (1.0) (Tierra alejándose, espacio profundo, aparece el sol)
+// 0.65 - 0.76: Impulso 2 (aceleración suave 1.0 -> 2.4 hacia el sol)
+// 0.76 - 0.92: Desaceleración continua (2.4 -> 0) y reveal del girasol
+// 0.92 - 1.00: Reposo final y mensaje
+const P_FIELD = 0.11
+const P_IMP1 = 0.22
+const P_IMP2_START = 0.65
+const P_IMP2_END = 0.76
+const P_DECEL_END = 0.92
+const TOTAL_SECONDS = 18.0
 
-const DUR_IMP1 = T_IMPULSE1 - T_FIELD // 1.6
-const DUR_CRUISE = T_IMPULSE2_START - T_IMPULSE1 // 7.7
-const DUR_IMP2 = T_IMPULSE2_END - T_IMPULSE2_START // 1.3
-const DUR_DECEL = T_DECEL_END - T_IMPULSE2_END // 3.9
+// Integrales analíticas de los tramos de velocidad para journeyProgress:
+// Tramo 1 (0.11 -> 0.22): smoothstep(0, 1, u) * 1.0. Int = 0.11 * 0.5 = 0.055
+const D1 = 0.11 * 1.0 * 0.5 // 0.055
+// Tramo 2 (0.22 -> 0.65): velocidad constante 1.0. Int = 0.43
+const D2 = D1 + 1.0 * (P_IMP2_START - P_IMP1) // 0.055 + 0.43 = 0.485
+// Tramo 3 (0.65 -> 0.76): 1.0 + smoothstep(0, 1, u) * 1.4. Int = 0.11 * (1.0 + 0.7) = 0.187
+const D3 = D2 + (P_IMP2_END - P_IMP2_START) * (1.0 + 1.4 * 0.5) // 0.485 + 0.187 = 0.672
+// Tramo 4 (0.76 -> 0.92): 2.4 * (1 - smoothstep). Int = 0.16 * 2.4 * 0.5 = 0.192
+const D_TOTAL = D3 + (P_DECEL_END - P_IMP2_END) * 2.4 * 0.5 // 0.672 + 0.192 = 0.864
 
-const S_IMP1_END = DUR_IMP1 * 1.0 * 0.5 // 0.8
-const S_CRUISE_END = S_IMP1_END + 1.0 * DUR_CRUISE // 8.5
-const S_IMP2_END = S_CRUISE_END + DUR_IMP2 * (1.0 + 1.4 * 0.5) // 10.71
-const S_TOTAL = S_IMP2_END + DUR_DECEL * 2.4 * 0.5 // 15.39
+export function computeKinematicsFromProgress(pRaw: number, reducedMotion = false): KinematicState {
+  const p = clamp01(pRaw)
+  const elapsedTime = p * TOTAL_SECONDS
 
-export function computeKinematics(elapsedSeconds: number, reducedMotion = false): KinematicState {
-  const t = Math.max(0, elapsedSeconds)
-  const progress = clamp01(t / T_TOTAL)
-
+  // 1. Velocidad física escalar de la cámara (continua, exactamente 2 aceleraciones)
   let travelSpeed = 0
-  let departureBoost = 0
-  let finalBoost = 0
   let distance = 0
 
-  if (t <= T_FIELD) {
-    // Fase 1: Campo en reposo
+  if (p <= P_FIELD) {
     travelSpeed = 0
-    departureBoost = 0
-    finalBoost = 0
     distance = 0
-  } else if (t <= T_IMPULSE1) {
-    // Fase 2: Primer impulso (0 -> 1.0)
-    const u = (t - T_FIELD) / DUR_IMP1
+  } else if (p <= P_IMP1) {
+    const u = (p - P_FIELD) / (P_IMP1 - P_FIELD)
     const smoothU = u * u * (3 - 2 * u)
     travelSpeed = smoothU * 1.0
-    departureBoost = Math.sin(u * Math.PI)
-    finalBoost = 0
-    distance = DUR_IMP1 * 1.0 * (u * u * u * (1 - 0.5 * u))
-  } else if (t <= T_IMPULSE2_START) {
-    // Fases 3, 4, 5: Crucero constante a 1.0 (Tierra alejándose, crucero interestelar, aparece la luz)
+    distance = (P_IMP1 - P_FIELD) * 1.0 * (u * u * u * (1 - 0.5 * u))
+  } else if (p <= P_IMP2_START) {
     travelSpeed = 1.0
-    departureBoost = 0
-    finalBoost = 0
-    distance = S_IMP1_END + 1.0 * (t - T_IMPULSE1)
-  } else if (t <= T_IMPULSE2_END) {
-    // Fase 6: Segundo impulso final (1.0 -> 2.4)
-    const u = (t - T_IMPULSE2_START) / DUR_IMP2
+    distance = D1 + 1.0 * (p - P_IMP1)
+  } else if (p <= P_IMP2_END) {
+    const u = (p - P_IMP2_START) / (P_IMP2_END - P_IMP2_START)
     const smoothU = u * u * (3 - 2 * u)
     travelSpeed = 1.0 + smoothU * 1.4
-    departureBoost = 0
-    finalBoost = Math.sin(u * Math.PI)
-    distance = S_CRUISE_END + DUR_IMP2 * (1.0 * u + 1.4 * (u * u * u * (1 - 0.5 * u)))
-  } else if (t <= T_DECEL_END) {
-    // Fase 7: Aproximación y desaceleración continua (2.4 -> 0)
-    const w = (t - T_IMPULSE2_END) / DUR_DECEL
+    distance = D2 + (P_IMP2_END - P_IMP2_START) * (1.0 * u + 1.4 * (u * u * u * (1 - 0.5 * u)))
+  } else if (p <= P_DECEL_END) {
+    const w = (p - P_IMP2_END) / (P_DECEL_END - P_IMP2_END)
     const smoothW = w * w * (3 - 2 * w)
     travelSpeed = 2.4 * (1 - smoothW)
-    departureBoost = 0
-    finalBoost = 0
-    distance = S_IMP2_END + DUR_DECEL * 2.4 * (w - (w * w * w * (1 - 0.5 * w)))
+    distance = D3 + (P_DECEL_END - P_IMP2_END) * 2.4 * (w - (w * w * w * (1 - 0.5 * w)))
   } else {
-    // Reposo final en el girasol
     travelSpeed = 0
-    departureBoost = 0
-    finalBoost = 0
-    distance = S_TOTAL
+    distance = D_TOTAL
   }
 
-  const rawBoost = Math.max(departureBoost, finalBoost)
-  const boostAmount = rawBoost * (reducedMotion ? 0.25 : 1.0)
-  const journeyProgress = clamp01(distance / S_TOTAL)
+  // 2. Envolvente visual para FOV (abre una sola vez con el impulso y estabiliza lentamente)
+  // Sin zoom de rebote dentro de la misma aceleración
+  let fov1 = 0
+  if (p >= 0.11 && p <= 0.20) {
+    const u = (p - 0.11) / 0.09
+    fov1 = u * u * (3 - 2 * u)
+  } else if (p > 0.20 && p <= 0.26) {
+    fov1 = 1.0
+  } else if (p > 0.26 && p <= 0.44) {
+    const w = (p - 0.26) / 0.18
+    fov1 = 1 - (w * w * (3 - 2 * w))
+  }
+
+  let fov2 = 0
+  if (p >= 0.65 && p <= 0.74) {
+    const u = (p - 0.65) / 0.09
+    fov2 = u * u * (3 - 2 * u)
+  } else if (p > 0.74 && p <= 0.78) {
+    fov2 = 1.0
+  } else if (p > 0.78 && p <= 0.92) {
+    const w = (p - 0.78) / 0.14
+    fov2 = 1 - (w * w * (3 - 2 * w))
+  }
+
+  const motionScale = reducedMotion ? 0.25 : 1.0
+  const departureBoost = fov1 * motionScale
+  const finalBoost = fov2 * motionScale
+  const boostAmount = Math.max(departureBoost, finalBoost)
+  const fovImpulse = boostAmount
+  const visualWarp = finalBoost
+  const journeyProgress = clamp01(distance / D_TOTAL)
 
   return {
-    progress,
-    elapsedTime: t,
+    progress: p,
+    elapsedTime,
     travelSpeed,
-    departureBoost: departureBoost * (reducedMotion ? 0.25 : 1.0),
-    finalBoost: finalBoost * (reducedMotion ? 0.25 : 1.0),
+    departureBoost,
+    finalBoost,
     boostAmount,
+    fovImpulse,
+    visualWarp,
     journeyProgress,
     intensity: boostAmount,
   }
 }
 
-export function computeKinematicsFromProgress(progress: number, reducedMotion = false): KinematicState {
-  return computeKinematics(progress * T_TOTAL, reducedMotion)
+export function computeKinematics(elapsedSeconds: number, reducedMotion = false): KinematicState {
+  return computeKinematicsFromProgress(elapsedSeconds / TOTAL_SECONDS, reducedMotion)
 }

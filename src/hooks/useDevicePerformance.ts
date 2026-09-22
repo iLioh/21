@@ -35,7 +35,7 @@ export function useDevicePerformance(): DeviceProfile {
       isLowPower,
       reducedMotion: viewport.reduced,
       dpr: viewport.mobile ? [1, 1.4] : [1, 1.85],
-      flowerCount: viewport.reduced ? 20 : isLowPower ? 34 : 58,
+      flowerCount: viewport.reduced ? 45 : isLowPower ? 75 : 125,
       particleCount: viewport.reduced ? 120 : isLowPower ? 280 : 560,
     }
   }, [viewport])

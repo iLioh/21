@@ -3,7 +3,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import { Color, InstancedMesh, MathUtils, MeshStandardMaterial, Object3D } from 'three'
 import type { TimelineState } from '../../hooks/useExperienceTimeline'
 import { seededRandom, smoothstep } from '../../utils/math'
-import { NORMALIZED_MILESTONES } from '../../config/experience'
+import { computeKinematicsFromProgress } from '../../utils/kinematics'
 
 interface PetalDatum {
   x: number
@@ -25,6 +25,14 @@ export function WarpTunnel({ timeline, count }: { timeline: React.RefObject<Time
   const dummy = useMemo(() => new Object3D(), [])
   const data = useMemo<PetalDatum[]>(() => {
     const random = seededRandom(90182)
+    // Paleta botánica auténtica de pétalos de girasol radiantes en el espacio (amarillo dorado / cadmio cálido)
+    const petalPalette = [
+      new Color('#ffb703'),
+      new Color('#ffc107'),
+      new Color('#ffd026'),
+      new Color('#ffa200'),
+      new Color('#ffcb37'),
+    ]
     return Array.from({ length: count }, () => {
       const radius = 1.4 + Math.pow(random(), 0.6) * 17
       const angle = random() * Math.PI * 2
@@ -40,7 +48,7 @@ export function WarpTunnel({ timeline, count }: { timeline: React.RefObject<Time
         spinX: (random() - 0.5) * 1.2,
         spinY: (random() - 0.5) * 1.5,
         spinZ: (random() - 0.5) * 2.1,
-        color: new Color().setHSL(0.105 + random() * 0.035, 0.88, 0.48 + random() * 0.12),
+        color: petalPalette[Math.floor(random() * petalPalette.length)],
       }
     })
   }, [count])
@@ -52,15 +60,15 @@ export function WarpTunnel({ timeline, count }: { timeline: React.RefObject<Time
 
   useFrame(({ camera, clock }, delta) => {
     if (!petals.current) return
-    const state = timeline.current
-    const p = state?.progress ?? 0
-    const travelSpeed = state?.travelSpeed ?? 0
-    const boostAmount = state?.boostAmount ?? 0
+    const p = timeline.current?.progress ?? 0
+    const state = computeKinematicsFromProgress(p)
+    const travelSpeed = state.travelSpeed
+    const visualWarp = state.visualWarp
 
-    // Visibilidad centralizada en los hitos:
+    // Visibilidad centralizada:
     // Aparece al entrar al crucero en el espacio profundo y se disuelve al aproximarse al girasol
-    const enter = smoothstep(NORMALIZED_MILESTONES.earthDepartureEnd - 0.04, NORMALIZED_MILESTONES.earthDepartureEnd + 0.04, p)
-    const exit = 1 - smoothstep(NORMALIZED_MILESTONES.impulse2End + 0.03, NORMALIZED_MILESTONES.sunflowerRevealEnd - 0.04, p)
+    const enter = smoothstep(0.24, 0.34, p)
+    const exit = 1 - smoothstep(0.78, 0.90, p)
     const visibility = enter * exit
 
     // Velocidad de partículas gobernada exclusivamente por travelSpeed:
@@ -70,13 +78,15 @@ export function WarpTunnel({ timeline, count }: { timeline: React.RefObject<Time
     const BASE_PARTICLE_SPEED = 13.5
     const particleTravelSpeed = BASE_PARTICLE_SPEED * travelSpeed
 
-    // boostAmount se utiliza exclusivamente para intensificar el efecto visual:
+    // visualWarp se utiliza exclusivamente para intensificar el efecto visual del impulso 2:
     // estiramiento/longitud (streak effect), escala y bloom/glow emisivo
-    const stretch = 1.0 + boostAmount * 1.6
+    // Se estira UNA SOLA VEZ y se estabiliza suavemente durante la aproximación
+    const stretch = 1.0 + visualWarp * 1.6
     const speedGlow = travelSpeed > 1 ? (travelSpeed - 1) * 0.15 : 0
+    const stepDelta = Math.min(delta, 0.05)
 
     data.forEach((petal, index) => {
-      petal.z += delta * petal.speed * particleTravelSpeed
+      petal.z += stepDelta * petal.speed * particleTravelSpeed
       if (petal.z > 3) petal.z -= 81
       const flutter = Math.sin(clock.elapsedTime * (1.1 + petal.speed) + index * 0.37)
       dummy.position.set(petal.x + flutter * 0.08, petal.y + Math.cos(clock.elapsedTime + index) * 0.06, petal.z)
@@ -89,7 +99,7 @@ export function WarpTunnel({ timeline, count }: { timeline: React.RefObject<Time
       dummy.scale.set(
         petal.size * 0.72 * nearScale,
         petal.size * 2.1 * nearScale * stretch,
-        petal.size * 0.22 * (1 + boostAmount * 0.4),
+        petal.size * 0.22 * (1 + visualWarp * 0.4),
       )
       dummy.updateMatrix()
       petals.current?.setMatrixAt(index, dummy.matrix)
@@ -100,8 +110,8 @@ export function WarpTunnel({ timeline, count }: { timeline: React.RefObject<Time
     petals.current.quaternion.copy(camera.quaternion)
     const material = petals.current.material as MeshStandardMaterial
     if (!Array.isArray(material)) {
-      material.opacity = visibility * 0.9
-      material.emissiveIntensity = 0.16 + boostAmount * 0.45 + speedGlow
+      material.opacity = visibility * 0.94
+      material.emissiveIntensity = 0.52 + visualWarp * 0.58 + speedGlow * 1.2
     }
   })
 
@@ -109,15 +119,14 @@ export function WarpTunnel({ timeline, count }: { timeline: React.RefObject<Time
     <instancedMesh ref={petals} args={[undefined, undefined, count]} frustumCulled={false} visible={false}>
       <sphereGeometry args={[1, 8, 5]} />
       <meshStandardMaterial
-        color="#f2b72c"
-        emissive="#b65b04"
-        emissiveIntensity={0.18}
-        roughness={0.48}
-        metalness={0.02}
+        color="#ffc107"
+        emissive="#d48000"
+        emissiveIntensity={0.52}
+        roughness={0.28}
+        metalness={0.0}
         transparent
         opacity={0}
         depthWrite={false}
-        vertexColors
       />
     </instancedMesh>
   )
